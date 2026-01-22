@@ -337,6 +337,179 @@ VALUES (7, 8);
 
 
 
+-------------- ikkinchi topshiriq
+
+-------------1---------1------------1
+
+CREATE 
+OR REPLACE FUNCTION get_top_students_by_course(p_course_id INTEGER)
+RETURNS TABLE(
+    student_id INTEGER,
+    student_name VARCHAR,
+    total_grade INTEGER
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN 
+    RETURN QUERY    
+    WITH grades_sum AS (
+        SELECT
+           g.student_id,
+           SUM(g.grade)::INTEGER AS sum_grade
+        FROM grades g
+        WHERE g.course_id = p_course_id
+        GROUP BY g.student_id   
+    ),
+    max_grade AS (
+        SELECT MAX(sum_grade) AS max_total
+        FROM grades_sum
+    )
+    SELECT
+        s.id,
+        s.name,
+        gs.sum_grade
+    FROM grades_sum gs
+    JOIN max_grade mg 
+        ON gs.sum_grade = mg.max_total
+    JOIN students s
+        ON s.id = gs.student_id;
+END;
+$$;
+
+
+
+---------------------
+
+SELECT * FROM get_top_students_by_course(1);
+SELECT * FROM get_top_students_by_course(2);
+
+
+-- DROP FUNCTION IF EXISTS get_top_students_by_course;
+
+
+
+----------2------------2-------------2
+
+CREATE
+OR REPLACE PROCEDURE update_course_student_count(p_course_id INTEGER)
+LANGUAGE plpgsql 
+AS $$
+DECLARE
+    student_count INTEGER;
+BEGIN
+    SELECT COUNT(*)
+    INTO student_count
+    FROM enrollments
+    WHERE course_id = p_course_id;
+
+    UPDATE courses
+    SET quantity_of_students = student_count
+    WHERE id = p_course_id;
+END;
+$$;
+
+
+CALL update_course_student_count(1);
+CALL update_course_student_count(2);
+CALL update_course_student_count(3);
+CALL update_course_student_count(4);
+CALL update_course_student_count(5);
+CALL update_course_student_count(6);
+CALL update_course_student_count(7);
+CALL update_course_student_count(8);
+CALL update_course_student_count(9);
+CALL update_course_student_count(10);
+CALL update_course_student_count(11);
+CALL update_course_student_count(12);
+CALL update_course_student_count(13);
+
+
+
+--------------3-------------3---------------3--------------
+
+
+CREATE 
+OR REPLACE FUNCTION student_registration_notification_function()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    INSERT INTO notifications("student_id", "message")
+    VALUES (
+        NEW.id,
+        'Student successfully registered on the platform 🎉'
+    );
+
+    RETURN NEW;
+END;
+$$;
+
+
+CREATE TRIGGER after_student_registration
+AFTER INSERT
+ON students
+FOR EACH ROW
+EXECUTE FUNCTION student_registration_notification_function();
+
+
+INSERT INTO students(name, gender, birth_date, region)
+VALUES ('Bob', 'M', '1999-09-09', 'Tashkent');
+
+SELECT * FROM notifications ORDER BY created_at DESC;
+
+
+-------------------------4----------------------4---------------------------4
+
+CREATE
+OR REPLACE FUNCTION sync_course_student_count()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    CALL update_course_student_count(NEW.course_id);
+    RETURN NEW;
+END;
+$$;
+
+
+CREATE TRIGGER enrollments_after_insert
+AFTER INSERT
+ON enrollments
+for EACH ROW
+EXECUTE FUNCTION  sync_course_student_count();
+
+----------delete------
+
+
+CREATE or REPLACE FUNCTION sync_course_student_count_delete()
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    CALL update_course_student_count(OLD.course_id);
+    RETURN OLD;
+END;
+$$;
+
+
+CREATE TRIGGER enrollments_after_delete
+AFTER DELETE
+ON enrollments
+FOR EACH ROW
+EXECUTE FUNCTION sync_course_student_count_delete();
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
